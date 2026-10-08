@@ -2,7 +2,8 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { DEFAULT_DATA, DEFAULT_SECTIONS } from './defaultData'
 
 // ข้อมูลที่ผู้เล่นเห็น = public/rules.json (แก้ในรีโปแล้ว push) | แบบร่างของแอดมิน = localStorage (เห็นเฉพาะแอดมิน)
-const DK = 'bestcity_draft_v6', UK = 'bestcity_users', SK = 'bestcity_session', TK = 'bestcity_theme'
+const ADMIN_USER = 'bestcity', ADMIN_HASH = 'b10d875e688a688e54196059c5922825bea59cea592de8cddc14debe99347c57' // sha256('ผู้ใช้:รหัสผ่าน')
+const DK = 'bestcity_draft_v6', SK = 'bestcity_session', TK = 'bestcity_theme'
 const uid = () => Math.random().toString(36).slice(2, 9)
 const today = () => new Date().toISOString().slice(0, 10)
 const load = (k, f) => { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : f } catch { return f } }
@@ -117,7 +118,7 @@ export default function App() {
   const [pub, setPub] = useState(null)
   const [draft, setDraft] = useState(() => { const d = load(DK, null); return d ? norm(d) : null })
   const [theme, setTheme] = useState(() => localStorage.getItem(TK) || 'dark')
-  const [admin, setAdmin] = useState(() => localStorage.getItem(SK))
+  const [admin, setAdmin] = useState(() => (localStorage.getItem(SK) === ADMIN_USER ? ADMIN_USER : null))
   const [hash, setHash] = useState(parseHash)
   const [q, setQ] = useState('')
   const [modal, setModal] = useState(null)
@@ -172,20 +173,10 @@ export default function App() {
     return Object.entries(m).filter(([, a]) => a.length > 1)
   }
 
-  const auth = async (mode, { user, pass }) => {
-    const users = load(UK, []), h = await sha(pass)
-    if (mode === 'login') {
-      if (!users.some((u) => u.user === user && u.h === h)) return setErr('ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง')
-      localStorage.setItem(SK, user); setAdmin(user)
-    } else {
-      if (users.some((u) => u.user === user)) return setErr('ชื่อผู้ใช้นี้ถูกใช้แล้ว')
-      if (pass.length < 6) return setErr('รหัสผ่านอย่างน้อย 6 ตัวอักษร')
-      save(UK, [...users, { user, h }])
-      if (!admin) { localStorage.setItem(SK, user); setAdmin(user) }
-    }
-    setErr(''); setModal(null)
+  const login = async ({ user, pass }) => {
+    if ((user || '').trim() !== ADMIN_USER || (await sha(`${ADMIN_USER}:${pass}`)) !== ADMIN_HASH) return setErr('ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง')
+    localStorage.setItem(SK, ADMIN_USER); setAdmin(ADMIN_USER); setErr(''); setModal(null)
   }
-  const noUsers = !load(UK, []).length
   const logout = () => { localStorage.removeItem(SK); setAdmin(null); setBar(false) }
 
   const saveItem = ({ cid, gid }, v) => {
@@ -310,7 +301,6 @@ export default function App() {
           <button className="btn sm" onClick={() => setModal({ t: 'dups' })}>🔍 หาข้อซ้ำ</button>
           <button className="btn sm" onClick={exportJSON}>⬇ Export</button>
           <button className="btn sm" onClick={() => file.current.click()}>⬆ Import</button>
-          <button className="btn sm" onClick={() => { setErr(''); setModal({ t: 'signup' }) }}>+ แอดมิน</button>
           <button className="btn sm danger" onClick={() => confirm('รีเซ็ตแบบร่างเป็นข้อมูลเริ่มต้น?') && commit(DEF)}>รีเซ็ต</button>
           <button className="btn sm ghost" onClick={logout}>ออกจากระบบ</button>
           <input ref={file} type="file" accept="application/json" hidden onChange={importJSON} />
@@ -404,9 +394,7 @@ export default function App() {
       {toast && <div className="toast">{toast}</div>}
 
       {modal?.t === 'login' && <Modal title="เข้าสู่ระบบแอดมิน" error={err} onClose={() => setModal(null)}
-        fields={[{ k: 'user', label: 'ชื่อผู้ใช้', req: true }, { k: 'pass', label: 'รหัสผ่าน', type: 'password', req: true }]} onSave={(v) => auth('login', v)} />}
-      {modal?.t === 'signup' && <Modal title="สมัครแอดมิน" error={err} onClose={() => setModal(null)}
-        fields={[{ k: 'user', label: 'ชื่อผู้ใช้', req: true }, { k: 'pass', label: 'รหัสผ่าน (6+ ตัว)', type: 'password', req: true }]} onSave={(v) => auth('signup', v)} />}
+        fields={[{ k: 'user', label: 'ชื่อผู้ใช้', req: true }, { k: 'pass', label: 'รหัสผ่าน', type: 'password', req: true }]} onSave={login} />}
       {modal?.t === 'item' && <Modal title={modal.v ? 'แก้ไขรายการ' : 'เพิ่มรายการ'} fields={itemFields} initial={modal.v} onClose={() => setModal(null)} onSave={(v) => saveItem(modal, v)} />}
       {modal?.t === 'group' && <Modal title={modal.v ? 'แก้ไขหมวดย่อย' : 'เพิ่มหมวดย่อย'} initial={modal.v} onClose={() => setModal(null)} onSave={(v) => saveGroup(modal.cid, v)}
         fields={[{ k: 'title', label: 'ชื่อหมวดย่อย', req: true }, { k: 'note', label: 'ข้อความโทษที่หัวหมวด (สีแดง เช่น บทลงโทษ : 🟧)' }]} />}
@@ -430,7 +418,6 @@ export default function App() {
             <div className="row end"><button className="btn" onClick={() => setModal(null)}>ปิด</button></div>
           </div>
         </div>)}
-      {!admin && noUsers && <button className="fab" onClick={() => { setErr(''); setModal({ t: 'signup' }) }}>สมัครแอดมินคนแรก</button>}
     </div>
   )
 }
