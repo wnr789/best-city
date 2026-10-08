@@ -103,18 +103,20 @@ export default function App() {
   const [nav, setNav] = useState(false)
   const [toast, setToast] = useState('')
   const [top, setTop] = useState(false)
+  const [sel, setSel] = useState(() => parseHash().grp)
+  const [pall, setPall] = useState(false)
   const file = useRef()
 
   useEffect(() => { document.documentElement.dataset.theme = theme; localStorage.setItem(TK, theme) }, [theme])
   useEffect(() => {
     fetch(import.meta.env.BASE_URL + 'rules.json?t=' + Date.now()).then((r) => r.json()).then((d) => setPub(norm(d))).catch(() => setPub(DEF))
-    const f = () => { setHash(parseHash()); setQ(''); setNav(false) }
+    const f = () => { setHash(parseHash()); setSel(parseHash().grp); setQ(''); setNav(false) }
     const s = () => setTop(window.scrollY > 500)
     window.addEventListener('hashchange', f); window.addEventListener('scroll', s)
     return () => { window.removeEventListener('hashchange', f); window.removeEventListener('scroll', s) }
   }, [])
   useEffect(() => {
-    if (hash.grp) { const t = setTimeout(() => document.getElementById('g-' + hash.grp)?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 80); return () => clearTimeout(t) }
+    if (hash.grp) { const t = setTimeout(() => [...document.querySelectorAll('.gpanel')].find((e) => e.offsetParent)?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 120); return () => clearTimeout(t) }
     window.scrollTo(0, 0)
   }, [hash, pub])
   const say = (m) => { setToast(m); setTimeout(() => setToast(''), 1800) }
@@ -206,8 +208,27 @@ export default function App() {
     r.readAsText(f); e.target.value = ''
   }
   const copy = (sid, cid, gid) => { navigator.clipboard?.writeText(link(sid, cid, gid)); say('คัดลอกลิงก์แล้ว') }
-  const jump = (gid) => { document.getElementById('g-' + gid)?.scrollIntoView({ behavior: 'smooth', block: 'start' }); history.replaceState(null, '', `#/${sec.id}/${cat.id}/${gid}`) }
+  const pick = (gid) => { const n = sel === gid ? '' : gid; setSel(n); history.replaceState(null, '', '#/' + [sec.id, cat.id, n].filter(Boolean).join('/')) }
+  const printAll = () => { setPall(true); setTimeout(() => { window.print(); setPall(false) }, 200) }
 
+  const panel = (gr) => (
+    <section className="panel gpanel">
+      <div className="panel-h">
+        <div><h3>{gr.title}</h3>{gr.note && <span className="note">{gr.note}</span>}</div>
+        <div className="acts">
+          <a title="คัดลอกลิงก์" className="noprint" onClick={() => copy(sec.id, cat.id, gr.id)}>🔗</a>
+          {admin && <>
+            <a onClick={() => setModal({ t: 'item', cid: cat.id, gid: gr.id })}>➕ รายการ</a>
+            <a onClick={() => setModal({ t: 'group', cid: cat.id, v: gr })}>✏️</a>
+            <a onClick={() => delGroup(cat.id, gr)}>🗑️</a></>}
+        </div>
+      </div>
+      {gr.items.map((it) => (
+        <Row key={it.id} it={it} admin={admin}
+          onEdit={() => setModal({ t: 'item', cid: cat.id, gid: gr.id, v: it })} onDel={() => delItem(cat.id, gr.id, it.id)} />))}
+      {!gr.items.length && <p className="muted pad">ยังไม่มีรายการ</p>}
+    </section>
+  )
   const itemFields = [{ k: 'title', label: 'หัวข้อ (เว้นว่างได้)' }, { k: 'detail', label: 'รายละเอียด (ใส่ ** ครอบข้อความที่ต้องการให้เป็นสีแดง)', area: true }, { k: 'penalty', label: 'บทลงโทษ / ค่าปรับ (แสดงสีแดง)' }]
   const total = cat ? cat.groups.reduce((n, x) => n + x.items.length, 0) : 0
   if (!pub) return <div className="loading">⚡ กำลังโหลดกฎ...</div>
@@ -306,32 +327,25 @@ export default function App() {
               <div className="cat-head">
                 <div><h2>{cat.icon} {cat.title}</h2><p className="muted">{cat.sub}{cat.upd && <small> · อัปเดตล่าสุด {cat.upd}</small>}</p></div>
                 <div className="row"><span className="count">{total} รายการ</span>
-                  <button className="btn ghost sm noprint" onClick={() => window.print()}>🖨️ พิมพ์/PDF</button></div>
+                  <button className="btn ghost sm noprint" onClick={printAll}>🖨️ พิมพ์/PDF</button></div>
               </div>
               <div className="cat-body">
-                <div className="cat-main">
+                <div className="glist">
+                  <div className="glist-h">หัวข้อย่อย ({cat.groups.length})</div>
                   {cat.groups.map((gr) => (
-                    <section className="panel" id={'g-' + gr.id} key={gr.id}>
-                      <div className="panel-h">
-                        <div><h3>{gr.title}</h3>{gr.note && <span className="note">{gr.note}</span>}</div>
-                        <div className="acts">
-                          <a title="คัดลอกลิงก์" className="noprint" onClick={() => copy(sec.id, cat.id, gr.id)}>🔗</a>
-                          {admin && <>
-                            <a onClick={() => setModal({ t: 'item', cid: cat.id, gid: gr.id })}>➕ รายการ</a>
-                            <a onClick={() => setModal({ t: 'group', cid: cat.id, v: gr })}>✏️</a>
-                            <a onClick={() => delGroup(cat.id, gr)}>🗑️</a></>}
-                        </div>
-                      </div>
-                      {gr.items.map((it) => (
-                        <Row key={it.id} it={it} admin={admin}
-                          onEdit={() => setModal({ t: 'item', cid: cat.id, gid: gr.id, v: it })} onDel={() => delItem(cat.id, gr.id, it.id)} />))}
-                      {!gr.items.length && <p className="muted pad">ยังไม่มีรายการ</p>}
-                    </section>
+                    <div key={gr.id} className={'gitem' + (sel === gr.id ? ' on' : '')}>
+                      <button onClick={() => pick(gr.id)}><span>{gr.title}</span><small>{gr.items.length}</small></button>
+                      {sel === gr.id && <div className="inline-open">{panel(gr)}</div>}
+                    </div>
                   ))}
-                  {admin && <button className="btn" onClick={() => setModal({ t: 'group', cid: cat.id })}>+ เพิ่มหมวดย่อย</button>}
+                  {admin && <button className="btn sm" onClick={() => setModal({ t: 'group', cid: cat.id })}>+ เพิ่มหมวดย่อย</button>}
                 </div>
-                {cat.groups.length > 3 && <aside className="toc"><b>สารบัญ</b>{cat.groups.map((gr) => <a key={gr.id} onClick={() => jump(gr.id)}>{gr.title}</a>)}</aside>}
+                <div className="right-panel">
+                  {cat.groups.find((g) => g.id === sel) ? panel(cat.groups.find((g) => g.id === sel))
+                    : <div className="placeholder">👈 เลือกหัวข้อย่อยทางซ้ายเพื่อดูรายละเอียด<br /><small>ทั้งหมวดมี {cat.groups.length} หัวข้อ / {total} รายการ</small></div>}
+                </div>
               </div>
+              {pall && <div className="print-all">{cat.groups.map((gr) => <div key={gr.id}>{panel(gr)}</div>)}</div>}
             </>) : <p className="muted">เมนูนี้ยังไม่มีหมวด {admin && 'กด "+ หมวดหลัก" ในแถบแอดมิน'}</p>}
           </>)}
         </main>
