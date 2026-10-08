@@ -18,6 +18,18 @@ const norm = (d) => {
 }
 const DEF = norm(DEFAULT_DATA)
 const parseHash = () => { const p = location.hash.replace(/^#\/?/, '').split('/'); return { route: p[0] || 'home', cat: p[1] || '', grp: p[2] || '' } }
+const ytId = (u) => { const t = String(u || '').trim(); const m = t.match(/(?:youtu\.be\/|[?&]v=|\/embed\/|\/shorts\/|\/live\/)([\w-]{11})/); return m ? m[1] : /^[\w-]{11}$/.test(t) ? t : '' }
+function Ambient({ id, dim, off }) {
+  if (!id) return null
+  const src = `https://www.youtube-nocookie.com/embed/${id}?autoplay=1&mute=1&controls=0&loop=1&playlist=${id}&modestbranding=1&playsinline=1&rel=0&disablekb=1&iv_load_policy=3`
+  return (
+    <div className="ambient" aria-hidden="true">
+      <div className="amb-img" style={{ backgroundImage: `url(https://i.ytimg.com/vi/${id}/hqdefault.jpg)` }} />
+      {!off && <iframe src={src} title="background" allow="autoplay; encrypted-media" tabIndex={-1} />}
+      <div className="amb-dim" style={{ opacity: dim }} />
+    </div>
+  )
+}
 const Rich = ({ t }) => t.split('**').map((s, i) => (i % 2 ? <b key={i} className="red">{s}</b> : s))
 const num = (e) => Number(String(e.target.value).replace(/,/g, '')) || 0
 const fmt = (n) => Math.round(n).toLocaleString('en-US')
@@ -105,6 +117,7 @@ export default function App() {
   const [top, setTop] = useState(false)
   const [sel, setSel] = useState(() => parseHash().grp)
   const [pall, setPall] = useState(false)
+  const [bgOff, setBgOff] = useState(() => !!localStorage.getItem('bestcity_bgoff'))
   const file = useRef()
 
   useEffect(() => { document.documentElement.dataset.theme = theme; localStorage.setItem(TK, theme) }, [theme])
@@ -231,10 +244,20 @@ export default function App() {
   )
   const itemFields = [{ k: 'title', label: 'หัวข้อ (เว้นว่างได้)' }, { k: 'detail', label: 'รายละเอียด (ใส่ ** ครอบข้อความที่ต้องการให้เป็นสีแดง)', area: true }, { k: 'penalty', label: 'บทลงโทษ / ค่าปรับ (แสดงสีแดง)' }]
   const total = cat ? cat.groups.reduce((n, x) => n + x.items.length, 0) : 0
+  const bgId = ytId(data.bgVideo)
+  const reduced = typeof matchMedia !== 'undefined' && matchMedia('(prefers-reduced-motion: reduce)').matches
+  useEffect(() => { document.documentElement.dataset.amb = bgId ? '1' : '0' }, [bgId])
+  const toggleBg = () => { const n = !bgOff; setBgOff(n); localStorage.setItem('bestcity_bgoff', n ? '1' : '') }
+  const saveBg = (v) => {
+    if ((v.bgVideo || '').trim() && !ytId(v.bgVideo)) return alert('ลิงก์ YouTube ไม่ถูกต้อง (รองรับ youtube.com/watch?v=..., youtu.be/..., /shorts/..., /live/...)')
+    commit({ ...data, bgVideo: (v.bgVideo || '').trim(), bgDim: v.bgDim || '0.55' }); setModal(null)
+  }
+  const bgFields = [{ k: 'bgVideo', label: 'ลิงก์วิดีโอ YouTube พื้นหลัง (เว้นว่าง = ปิดพื้นหลังวิดีโอ)' }, { k: 'bgDim', label: 'ความเข้มของพื้นหลัง', opts: [['0.55', 'ปกติ'], ['0.35', 'สว่าง'], ['0.75', 'มืด']] }]
   if (!pub) return <div className="loading">⚡ กำลังโหลดกฎ...</div>
 
   return (
     <div className="app">
+      <Ambient id={bgId} dim={Number(data.bgDim) || 0.55} off={bgOff || reduced} />
       <header className="top">
         <a className="brand" onClick={() => go('home')}>⚡ <b>{data.siteName}</b></a>
         <nav className={'links' + (nav ? ' open' : '')}>
@@ -244,6 +267,7 @@ export default function App() {
           {data.discord && <a href={data.discord} target="_blank" rel="noreferrer">💬 Discord</a>}
         </nav>
         <div className="row">
+          {bgId && <button className="btn ghost sm" title="เปิด/ปิดวิดีโอพื้นหลัง" onClick={toggleBg}>{bgOff ? '🎬 เปิด' : '🎬'}</button>}
           <button className="btn ghost sm" onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}>{theme === 'dark' ? '☀️' : '🌙'}</button>
           {admin ? <button className="btn sm" onClick={() => setBar(!bar)}>⚙️ {admin}</button>
             : <button className="btn sm" onClick={() => { setErr(''); setModal({ t: 'login' }) }}>แอดมิน</button>}
@@ -259,6 +283,7 @@ export default function App() {
           <button className="btn sm" onClick={() => setModal({ t: 'cat', v: { sec: sec?.id } })}>+ หมวดหลัก</button>
           <button className="btn sm" onClick={() => setModal({ t: 'sec' })}>+ เมนู</button>
           <button className="btn sm" onClick={() => setModal({ t: 'site' })}>ตั้งค่าเว็บ</button>
+          <button className="btn sm" onClick={() => setModal({ t: 'bg', v: { bgVideo: data.bgVideo, bgDim: data.bgDim } })}>🎬 วิดีโอพื้นหลัง</button>
           <button className="btn sm" onClick={() => setModal({ t: 'dups' })}>🔍 หาข้อซ้ำ</button>
           <button className="btn sm" onClick={exportJSON}>⬇ Export</button>
           <button className="btn sm" onClick={() => file.current.click()}>⬆ Import</button>
@@ -367,8 +392,9 @@ export default function App() {
       {modal?.t === 'sec' && <Modal title={modal.v ? 'แก้ไขเมนู' : 'เพิ่มเมนู'} initial={modal.v} onClose={() => setModal(null)} onSave={saveSec}
         fields={[{ k: 'icon', label: 'ไอคอน (อีโมจิ)' }, { k: 'title', label: 'ชื่อเมนู (เช่น ตำรวจ)', req: true }, { k: 'desc', label: 'คำอธิบายบนการ์ดหน้าแรก', area: true }]} />}
       {modal?.t === 'site' && <Modal title="ตั้งค่าเว็บ" initial={data} onClose={() => setModal(null)}
-        fields={[{ k: 'siteName', label: 'ชื่อเมือง' }, { k: 'welcome', label: 'ข้อความต้อนรับ' }, { k: 'tagline', label: 'คำโปรย' }, { k: 'announcement', label: 'ประกาศ/อัปเดตกฎล่าสุด (แสดงแบนเนอร์หน้าแรก เว้นว่าง = ซ่อน)' }, { k: 'heroImage', label: 'URL โลโก้/รูปหน้าแรก' }, { k: 'discord', label: 'ลิงก์ Discord' }, { k: 'facebook', label: 'ลิงก์ Facebook' }]}
-        onSave={(v) => { commit({ ...data, ...['siteName', 'welcome', 'tagline', 'announcement', 'heroImage', 'discord', 'facebook'].reduce((o, k) => ({ ...o, [k]: v[k] || '' }), {}) }); setModal(null) }} />}
+        fields={[{ k: 'siteName', label: 'ชื่อเมือง' }, { k: 'welcome', label: 'ข้อความต้อนรับ' }, { k: 'tagline', label: 'คำโปรย' }, { k: 'announcement', label: 'ประกาศ/อัปเดตกฎล่าสุด (แสดงแบนเนอร์หน้าแรก เว้นว่าง = ซ่อน)' }, { k: 'heroImage', label: 'URL โลโก้/รูปหน้าแรก' }, { k: 'discord', label: 'ลิงก์ Discord' }, { k: 'facebook', label: 'ลิงก์ Facebook' }, ...bgFields]}
+        onSave={(v) => { if ((v.bgVideo || '').trim() && !ytId(v.bgVideo)) return alert('ลิงก์ YouTube ไม่ถูกต้อง'); commit({ ...data, ...['siteName', 'welcome', 'tagline', 'announcement', 'heroImage', 'discord', 'facebook', 'bgVideo'].reduce((o, k) => ({ ...o, [k]: (v[k] || '').trim() }), {}), bgDim: v.bgDim || '0.55' }); setModal(null) }} />}
+      {modal?.t === 'bg' && <Modal title="🎬 วิดีโอพื้นหลัง (YouTube)" initial={modal.v} fields={bgFields} onClose={() => setModal(null)} onSave={saveBg} />}
       {modal?.t === 'dups' && (
         <div className="overlay" onClick={() => setModal(null)}>
           <div className="modal wide" onClick={(e) => e.stopPropagation()}>
