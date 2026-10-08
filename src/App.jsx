@@ -142,19 +142,24 @@ function Modal({ title, fields, initial, onSave, onClose, error }) {
   )
 }
 
-function Row({ it, path, href, admin, onEdit, onDel }) {
+function Row({ it, n, pens = [], path, href, admin, onEdit, onDel }) {
   const lines = (it.detail || '').split('\n')
   const tl = lines.find((l) => l.startsWith('ประเภทคดี:'))
   const detail = lines.filter((l) => l !== tl).join('\n')
   const tag = tl ? tl.replace('ประเภทคดี:', '').trim() : ''
+  const penOnly = !it.title && !detail
   return (
-    <div className={'item' + (!it.title && !detail ? ' pen-only' : '')}>
-      <div className="item-main">
+    <div className={'item' + (penOnly ? ' pen-only' : '')}>
+      {n != null && <span className="no">ข้อที่ {n}</span>}
+      {!penOnly && <div className="item-main">
         {path && <small className="path"><a href={href}>{path}</a></small>}
         {(it.title || tag) && <b>{it.title && <Rich t={it.title} />}{tag && <span className={'tag' + (tag.includes('แดง') ? ' red-tag' : '')}>{tag}</span>}</b>}
         {detail && <p><Rich t={detail} /></p>}
-      </div>
-      {it.penalty && <div className="penalty">{it.penalty}</div>}
+      </div>}
+      {(it.penalty || pens.length > 0) && <div className="penalty">
+        {it.penalty && <div>{it.penalty}</div>}
+        {pens.map((p) => <div key={p.it.id}>{p.it.penalty}{admin && <span className="acts mini"><a onClick={p.onEdit}>✏️</a><a onClick={p.onDel}>🗑️</a></span>}</div>)}
+      </div>}
       {admin && <div className="acts"><a onClick={onEdit}>✏️</a><a onClick={onDel}>🗑️</a></div>}
     </div>
   )
@@ -343,13 +348,29 @@ export default function App() {
   const saveItem = ({ cid, gid }, v) => {
     const title = (v.title || '').trim(); if (!title && !v.detail && !v.penalty) return
     const f = { title, detail: v.detail || '', penalty: v.penalty || '' }
+    const [tc, tg] = (v.move || `${cid}|${gid}`).split('|')
+    if (v.id && (tc !== cid || tg !== gid)) {
+      commit({ ...data, categories: cats.map((c) => ({ ...c, upd: c.id === cid || c.id === tc ? today() : c.upd, groups: c.groups.map((g) => {
+        if (c.id === cid && g.id === gid) return { ...g, items: g.items.filter((x) => x.id !== v.id) }
+        if (c.id === tc && g.id === tg) return { ...g, items: [...g.items, { id: v.id, ...f }] }
+        return g }) })) })
+      setModal(null); say('ย้ายรายการแล้ว'); location.hash = '#/' + [cats.find((c) => c.id === tc).sec, tc, tg].join('/'); return
+    }
     upGroup(cid, gid, (gr) => ({ ...gr, items: v.id ? gr.items.map((x) => (x.id === v.id ? { ...x, ...f } : x)) : [...gr.items, { id: uid(), ...f }] }))
     setModal(null)
   }
+  const editItem = (cid, gid, it) => setModal({ t: 'item', cid, gid, v: { ...it, move: `${cid}|${gid}` } })
   const delItem = (cid, gid, id) => confirm('ลบรายการนี้?') && upGroup(cid, gid, (gr) => ({ ...gr, items: gr.items.filter((x) => x.id !== id) }))
   const saveGroup = (cid, v) => {
     if (!(v.title || '').trim()) return
-    upCat(cid, (c) => ({ ...c, groups: v.id ? c.groups.map((x) => (x.id === v.id ? { ...x, title: v.title, note: v.note || '', icon: v.icon || '', color: v.color || '' } : x)) : [...c.groups, { id: uid(), title: v.title, note: v.note || '', items: [] }] }))
+    const f = { title: v.title, note: v.note || '', icon: v.icon || '', color: v.color || '', num: v.num || 'auto' }
+    const to = v.id ? (v.move || cid) : cid
+    if (v.id && to !== cid) {
+      const ng = { ...cats.find((c) => c.id === cid).groups.find((g) => g.id === v.id), ...f }
+      commit({ ...data, categories: cats.map((c) => (c.id === cid ? { ...c, groups: c.groups.filter((g) => g.id !== v.id), upd: today() } : c.id === to ? { ...c, groups: [...c.groups, ng], upd: today() } : c)) })
+      setModal(null); say('ย้ายหัวข้อย่อยแล้ว'); location.hash = '#/' + [cats.find((c) => c.id === to).sec, to, v.id].join('/'); return
+    }
+    upCat(cid, (c) => ({ ...c, groups: v.id ? c.groups.map((x) => (x.id === v.id ? { ...x, ...f } : x)) : [...c.groups, { id: uid(), ...f, items: [] }] }))
     setModal(null)
   }
   const delGroup = (cid, gr) => confirm(`ลบหมวดย่อย "${gr.title}" และรายการทั้งหมด?`) && upCat(cid, (c) => ({ ...c, groups: c.groups.filter((x) => x.id !== gr.id) }))
@@ -388,24 +409,38 @@ export default function App() {
   const pick = (gid) => { const n = sel === gid ? '' : gid; setSel(n); history.replaceState(null, '', '#/' + [sec.id, cat.id, n].filter(Boolean).join('/')) }
   const printAll = () => { setPall(true); setTimeout(() => { window.print(); setPall(false) }, 200) }
 
-  const panel = (gr) => (
-    <section className="panel gpanel">
-      <div className="panel-h" style={gr.color ? { borderLeftColor: gr.color } : null}>
-        <div><h3>{gr.icon && <span>{gr.icon} </span>}{gr.title}</h3>{gr.note && <span className="note">{gr.note}</span>}</div>
-        <div className="acts">
-          <a title="คัดลอกลิงก์" className="noprint" onClick={() => copy(sec.id, cat.id, gr.id)}>🔗</a>
-          {admin && <>
-            <a onClick={() => setModal({ t: 'item', cid: cat.id, gid: gr.id })}>➕ รายการ</a>
-            <a onClick={() => setModal({ t: 'group', cid: cat.id, v: gr })}>✏️</a>
-            <a onClick={() => delGroup(cat.id, gr)}>🗑️</a></>}
+  const catOpts = cats.map((c) => [c.id, `${(secs.find((x) => x.id === c.sec) || {}).title || ''} › ${c.icon} ${c.title}`])
+  const groupOpts = cats.flatMap((c) => c.groups.map((g) => [`${c.id}|${g.id}`, `${c.title} › ${g.title}`]))
+  const panel = (gr) => {
+    const showNum = gr.num === 'on' || (gr.num !== 'off' && !/^ข้อ\s*\d/.test(gr.title))
+    const blocks = []; let k = 0
+    gr.items.forEach((it) => {
+      if (!it.title && !it.detail && blocks.length) blocks[blocks.length - 1].pens.push(it)
+      else blocks.push({ it, n: it.title || it.detail ? ++k : null, pens: [] })
+    })
+    return (
+      <section className="panel gpanel">
+        <div className="panel-h" style={gr.color ? { borderLeftColor: gr.color } : null}>
+          <div><small className="crumbline">{sec.icon} {sec.title} › {cat.icon} {cat.title}</small>
+            <h3>{gr.icon && <span>{gr.icon} </span>}{gr.title}</h3>{gr.note && <span className="note">{gr.note}</span>}</div>
+          <div className="acts">
+            <a title="คัดลอกลิงก์" className="noprint" onClick={() => copy(sec.id, cat.id, gr.id)}>🔗</a>
+            {admin && <>
+              <a onClick={() => setModal({ t: 'item', cid: cat.id, gid: gr.id })}>➕ รายการ</a>
+              <a onClick={() => setModal({ t: 'group', cid: cat.id, v: { ...gr, move: cat.id } })}>✏️</a>
+              <a onClick={() => delGroup(cat.id, gr)}>🗑️</a></>}
+          </div>
         </div>
-      </div>
-      {gr.items.map((it) => (
-        <Row key={it.id} it={it} admin={admin}
-          onEdit={() => setModal({ t: 'item', cid: cat.id, gid: gr.id, v: it })} onDel={() => delItem(cat.id, gr.id, it.id)} />))}
-      {!gr.items.length && <p className="muted pad">ยังไม่มีรายการ</p>}
-    </section>
-  )
+        <div className="items">
+          {blocks.map((b) => (
+            <Row key={b.it.id} it={b.it} n={showNum ? b.n : null} admin={admin}
+              pens={b.pens.map((p) => ({ it: p, onEdit: () => editItem(cat.id, gr.id, p), onDel: () => delItem(cat.id, gr.id, p.id) }))}
+              onEdit={() => editItem(cat.id, gr.id, b.it)} onDel={() => delItem(cat.id, gr.id, b.it.id)} />))}
+        </div>
+        {!gr.items.length && <p className="muted pad">ยังไม่มีรายการ</p>}
+      </section>
+    )
+  }
   const itemFields = [{ k: 'title', label: 'หัวข้อ (เว้นว่างได้)', rich: true }, { k: 'detail', label: 'รายละเอียด', rich: true, area: true }, { k: 'penalty', label: 'บทลงโทษ / ค่าปรับ (แสดงสีแดง)' }]
   const total = cat ? cat.groups.reduce((n, x) => n + x.items.length, 0) : 0
   const bgCache = load('bestcity_bgcache', {})
@@ -534,7 +569,7 @@ export default function App() {
             {!results.length && <p className="muted">ไม่พบข้อมูลที่ตรงกับ “{q}”</p>}
             <section className="panel">{results.map(({ it, c, gr }) => (
               <Row key={it.id} it={it} path={`${c.title} › ${gr.title}`} href={'#/' + [c.sec, c.id, gr.id].join('/')} admin={admin}
-                onEdit={() => setModal({ t: 'item', cid: c.id, gid: gr.id, v: it })} onDel={() => delItem(c.id, gr.id, it.id)} />))}</section>
+                onEdit={() => editItem(c.id, gr.id, it)} onDel={() => delItem(c.id, gr.id, it.id)} />))}</section>
           </>) : hash.route === 'tools' ? (<>
             <div className="crumb"><a onClick={() => go('home')}>หน้าแรก</a> › คำนวณโทษ</div>
             <div className="cat-head"><div><h1>🧮 เครื่องคิดเลขโทษ</h1><p className="muted">อัตราบิลจำคุก 1 นาที = 500 IC | คดีทั่วไปประกันได้จนเหลือ 5 นาที | คดีแดงประกันได้จนเหลือ 30 นาที</p></div></div>
@@ -587,9 +622,9 @@ export default function App() {
 
       {modal?.t === 'login' && <Modal title="เข้าสู่ระบบแอดมิน" error={err} onClose={() => setModal(null)}
         fields={[{ k: 'user', label: 'ชื่อผู้ใช้', req: true }, { k: 'pass', label: 'รหัสผ่าน', type: 'password', req: true }]} onSave={login} />}
-      {modal?.t === 'item' && <Modal title={modal.v ? 'แก้ไขรายการ' : 'เพิ่มรายการ'} fields={itemFields} initial={modal.v} onClose={() => setModal(null)} onSave={(v) => saveItem(modal, v)} />}
+      {modal?.t === 'item' && <Modal title={modal.v ? 'แก้ไขรายการ' : 'เพิ่มรายการ'} fields={modal.v ? [...itemFields, { k: 'move', label: 'ย้ายรายการนี้ไปหัวข้อย่อย', opts: groupOpts }] : itemFields} initial={modal.v} onClose={() => setModal(null)} onSave={(v) => saveItem(modal, v)} />}
       {modal?.t === 'group' && <Modal title={modal.v ? 'แก้ไขหมวดย่อย' : 'เพิ่มหมวดย่อย'} initial={modal.v} onClose={() => setModal(null)} onSave={(v) => saveGroup(modal.cid, v)}
-        fields={[{ k: 'title', label: 'ชื่อหมวดย่อย', req: true }, { k: 'icon', label: 'ไอคอนหมวดย่อย (เลือกอิโมจิ)', emoji: true }, { k: 'color', label: 'สีของหมวดย่อย', color: true }, { k: 'note', label: 'ข้อความโทษที่หัวหมวด (สีแดง เช่น บทลงโทษ : 🟧)' }]} />}
+        fields={[{ k: 'title', label: 'ชื่อหมวดย่อย', req: true }, { k: 'icon', label: 'ไอคอนหมวดย่อย (เลือกอิโมจิ)', emoji: true }, { k: 'color', label: 'สีของหมวดย่อย', color: true }, { k: 'num', label: 'ลำดับข้อ 1, 2, 3... ในหัวข้อย่อยนี้', opts: [['auto', 'อัตโนมัติ (ซ่อนถ้าชื่อขึ้นต้นด้วย "ข้อ 1")'], ['on', 'แสดง'], ['off', 'ซ่อน']] }, { k: 'note', label: 'ข้อความโทษที่หัวหมวด (สีแดง เช่น บทลงโทษ : 🟧)' }, ...(modal.v ? [{ k: 'move', label: 'ย้ายหัวข้อย่อยนี้ไปหมวดหมู่', opts: catOpts }] : [])]} />}
       {modal?.t === 'cat' && <Modal title={modal.v?.id ? 'แก้ไขหมวดหลัก' : 'เพิ่มหมวดหลัก'} initial={modal.v} onClose={() => setModal(null)} onSave={saveCat}
         fields={[{ k: 'sec', label: 'อยู่ในเมนู', opts: secs.map((s) => [s.id, `${s.icon} ${s.title}`]) }, { k: 'icon', label: 'ไอคอน (เลือกอิโมจิ)', emoji: true }, { k: 'title', label: 'ชื่อหมวด', req: true }, { k: 'sub', label: 'คำอธิบายสั้น' }]} />}
       {modal?.t === 'sec' && <Modal title={modal.v ? 'แก้ไขเมนู' : 'เพิ่มเมนู'} initial={modal.v} onClose={() => setModal(null)} onSave={saveSec}
