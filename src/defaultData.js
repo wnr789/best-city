@@ -52,6 +52,7 @@ export const DEFAULT_DATA = {
   sections: DEFAULT_SECTIONS,
   announcement: '',
   bgVideo: '',
+  gcCode: '',
   bgDim: '0.55',
   updated: '2026-10-05',
   categories: ORDER.map((id) => ({ ...(id === 'newbie' ? NEWBIE : GEN.find((c) => c.id === id)), sec: SEC[id] })).filter((c) => c.id),
