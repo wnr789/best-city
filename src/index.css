@@ -116,3 +116,9 @@ html[data-amb='1'] :is(.panel,.sec-card,.gitem>button,.tab,.placeholder,.search,
 html[data-amb='1'] .item:hover { background:rgba(255,255,255,.08); }
 html[data-amb='1'] .top { background:var(--panel); }
 html[data-amb='1'] footer { background:transparent; }
+
+.amb-video { position:absolute; inset:-10%; width:120%; height:120%; object-fit:cover; filter:blur(40px) saturate(1.9) brightness(1.1); }
+.amb-img.sharp { inset:-3%; filter:blur(14px) saturate(1.5); }
+.filechip { padding:10px 12px; border-radius:10px; border:1px solid var(--line); background:var(--bg); color:var(--text); }
+.filechip a { color:var(--red); margin-left:8px; }
+.modal input[type=file] { padding:8px; }
