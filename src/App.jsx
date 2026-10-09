@@ -2,12 +2,18 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { DEFAULT_DATA, DEFAULT_SECTIONS } from './defaultData'
 
 // ข้อมูลที่ผู้เล่นเห็น = public/rules.json (แก้ในรีโปแล้ว push) | แบบร่างของแอดมิน = localStorage (เห็นเฉพาะแอดมิน)
+// เข้าถึง localStorage อย่างปลอดภัย (บางเบราว์เซอร์/โหมดส่วนตัว/เบราว์เซอร์ในแอปบล็อกไว้ ซึ่งเคยทำให้หน้าเว็บพัง)
+const ls = {
+  get: (k) => { try { return localStorage.getItem(k) } catch { return null } },
+  set: (k, v) => { try { localStorage.setItem(k, v) } catch { /* ignore */ } },
+  del: (k) => { try { localStorage.removeItem(k) } catch { /* ignore */ } },
+}
 const ADMIN_USER = 'bestcity', ADMIN_HASH = 'b10d875e688a688e54196059c5922825bea59cea592de8cddc14debe99347c57' // sha256('ผู้ใช้:รหัสผ่าน')
 const DK = 'bestcity_draft_v6', SK = 'bestcity_session', TK = 'bestcity_theme'
 const uid = () => Math.random().toString(36).slice(2, 9)
 const today = () => new Date().toISOString().slice(0, 10)
-const load = (k, f) => { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : f } catch { return f } }
-const save = (k, v) => localStorage.setItem(k, JSON.stringify(v))
+const load = (k, f) => { try { const v = ls.get(k); return v ? JSON.parse(v) : f } catch { return f } }
+const save = (k, v) => ls.set(k, JSON.stringify(v))
 const sha = async (s) =>
   [...new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(s)))]
     .map((b) => b.toString(16).padStart(2, '0')).join('')
@@ -207,7 +213,7 @@ function SearchStats({ sh }) {
 // ===== สถิติผู้เข้าชม (GoatCounter) =====
 const ymd = (d) => d.toLocaleDateString('en-CA', { timeZone: 'Asia/Bangkok' })
 function Stats({ code, onClose, onSettings }) {
-  const [token, setToken] = useState(() => localStorage.getItem('gc_token') || '')
+  const [token, setToken] = useState(() => ls.get('gc_token') || '')
   const [rows, setRows] = useState(null), [top, setTop] = useState([]), [err, setErr] = useState(''), [busy, setBusy] = useState(false), [sh, setSh] = useState(null)
   const api = async (path) => {
     const r = await fetch(`https://${code}.goatcounter.com/api/v0${path}`, { headers: { Authorization: 'Bearer ' + token } })
@@ -217,7 +223,7 @@ function Stats({ code, onClose, onSettings }) {
   const run = async () => {
     setBusy(true); setErr('')
     try {
-      localStorage.setItem('gc_token', token)
+      ls.set('gc_token', token)
       const out = []
       for (let i = 9; i >= 0; i--) {
         const d = ymd(new Date(Date.now() - i * 864e5))
@@ -273,8 +279,8 @@ function Stats({ code, onClose, onSettings }) {
 export default function App() {
   const [pub, setPub] = useState(null)
   const [draft, setDraft] = useState(() => { const d = load(DK, null); return d ? norm(d) : null })
-  const [theme, setTheme] = useState(() => localStorage.getItem(TK) || 'dark')
-  const [adminUser, setAdmin] = useState(() => (localStorage.getItem(SK) === ADMIN_USER ? ADMIN_USER : null))
+  const [theme, setTheme] = useState(() => ls.get(TK) || 'dark')
+  const [adminUser, setAdmin] = useState(() => (ls.get(SK) === ADMIN_USER ? ADMIN_USER : null))
   const [hash, setHash] = useState(parseHash)
   const [q, setQ] = useState('')
   const [modal, setModal] = useState(null)
@@ -286,13 +292,13 @@ export default function App() {
   const [sel, setSel] = useState(() => parseHash().grp)
   const [pall, setPall] = useState(false)
   const [preview, setPreview] = useState(null)
-  const [bgOff, setBgOff] = useState(() => !!localStorage.getItem('bestcity_bgoff'))
+  const [bgOff, setBgOff] = useState(() => !!ls.get('bestcity_bgoff'))
   const file = useRef()
   const [viewer, setViewer] = useState(false)
   const admin = adminUser && !viewer ? adminUser : null
   const lastQ = useRef('')
 
-  useEffect(() => { document.documentElement.dataset.theme = theme; localStorage.setItem(TK, theme) }, [theme])
+  useEffect(() => { document.documentElement.dataset.theme = theme; ls.set(TK, theme) }, [theme])
   useEffect(() => {
     fetch(import.meta.env.BASE_URL + 'rules.json?t=' + Date.now()).then((r) => r.json()).then((d) => setPub(norm(d))).catch(() => setPub(DEF))
     const f = () => { setHash(parseHash()); setSel(parseHash().grp); setQ(''); setNav(false) }
@@ -341,9 +347,9 @@ export default function App() {
 
   const login = async ({ user, pass }) => {
     if ((user || '').trim() !== ADMIN_USER || (await sha(`${ADMIN_USER}:${pass}`)) !== ADMIN_HASH) return setErr('ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง')
-    localStorage.setItem(SK, ADMIN_USER); setAdmin(ADMIN_USER); setErr(''); setModal(null)
+    ls.set(SK, ADMIN_USER); setAdmin(ADMIN_USER); setErr(''); setModal(null)
   }
-  const logout = () => { localStorage.removeItem(SK); setAdmin(null); setViewer(false); setBar(false) }
+  const logout = () => { ls.del(SK); setAdmin(null); setViewer(false); setBar(false) }
 
   const saveItem = ({ cid, gid }, v) => {
     const title = (v.title || '').trim(); if (!title && !v.detail && !v.penalty) return
@@ -447,7 +453,7 @@ export default function App() {
   const bg = preview || bgInfo(pub ? data.bgVideo : bgCache.v)
   const bgDimV = Number(pub ? data.bgDim : bgCache.d) || 0.55
   useEffect(() => { document.documentElement.dataset.amb = bg ? '1' : '0' }, [!!bg])
-  const toggleBg = () => { const n = !bgOff; setBgOff(n); localStorage.setItem('bestcity_bgoff', n ? '1' : '') }
+  const toggleBg = () => { const n = !bgOff; setBgOff(n); ls.set('bestcity_bgoff', n ? '1' : '') }
   const pickBg = (file, set) => {
     if (!file) return
     if (file.type.startsWith('image/')) {
@@ -463,14 +469,14 @@ export default function App() {
   const bgFields = [{ k: 'bgVideo', label: 'พื้นหลัง: ลิงก์ YouTube หรือชื่อไฟล์ใน public/ เช่น bg.mp4 (เว้นว่าง = ปิด)' },
     { k: '_file', label: 'หรือเลือกไฟล์จากเครื่อง (ภาพ ≤ 800 KB ฝังในเว็บได้ / วิดีโอ ดูตัวอย่างได้)', pick: pickBg },
     { k: 'bgDim', label: 'ความเข้มของพื้นหลัง', opts: [['0.55', 'ปกติ'], ['0.35', 'สว่าง'], ['0.75', 'มืด']] }]
-  useEffect(() => { if (pub) localStorage.setItem('bestcity_bgcache', JSON.stringify({ v: pub.bgVideo || '', d: pub.bgDim || '0.55' })) }, [pub])
+  useEffect(() => { if (pub) ls.set('bestcity_bgcache', JSON.stringify({ v: pub.bgVideo || '', d: pub.bgDim || '0.55' })) }, [pub])
   useEffect(() => {
     const f = (e) => { if (e.key === '/' && !/INPUT|TEXTAREA|SELECT/.test(document.activeElement?.tagName || '')) { e.preventDefault(); document.getElementById('gsearch')?.focus() } }
     window.addEventListener('keydown', f); return () => window.removeEventListener('keydown', f)
   }, [])
   useEffect(() => {
     const code = (data.gcCode || '').trim(), term = q.trim().toLowerCase().slice(0, 40)
-    if (!code || adminUser || localStorage.getItem('gc_ignore') || term.length < 2) return
+    if (!code || adminUser || ls.get('gc_ignore') || term.length < 2) return
     const t = setTimeout(() => {
       if (lastQ.current === term) return; lastQ.current = term
       window.goatcounter?.count?.({ path: `/${results && results.length ? 'search' : 'search-miss'}/${encodeURIComponent(term)}`, title: term })
@@ -479,7 +485,7 @@ export default function App() {
   }, [q, data.gcCode, adminUser])
   useEffect(() => {
     const code = (data.gcCode || '').trim()
-    if (!code || adminUser || localStorage.getItem('gc_ignore')) return
+    if (!code || adminUser || ls.get('gc_ignore')) return
     const send = () => window.goatcounter?.count?.({ path: '/' + [hash.route, hash.cat].filter(Boolean).join('/'), title: document.title })
     if (window.__gc) return send()
     window.__gc = true; window.goatcounter = { no_onload: true }
@@ -514,7 +520,7 @@ export default function App() {
       {admin && preview && <div className="draft">🎬 กำลังดูตัวอย่างวิดีโอจากเครื่อง (ผู้เล่นไม่เห็น) <button className="btn sm ghost" onClick={() => setPreview(null)}>ปิดตัวอย่าง</button></div>}
       {admin && draft && <div className="draft">● มีแบบร่างที่ยังไม่เผยแพร่ (ผู้เล่นยังไม่เห็น) — กด Export แล้วนำ <b>rules.json</b> ไปแทนไฟล์ <b>public/rules.json</b> ในรีโป
         <button className="btn sm" onClick={exportJSON}>⬇ Export</button>
-        <button className="btn sm ghost" onClick={() => confirm('ละทิ้งแบบร่างและกลับไปใช้ข้อมูลที่เผยแพร่?') && (localStorage.removeItem(DK), setDraft(null))}>ละทิ้งแบบร่าง</button></div>}
+        <button className="btn sm ghost" onClick={() => confirm('ละทิ้งแบบร่างและกลับไปใช้ข้อมูลที่เผยแพร่?') && (ls.del(DK), setDraft(null))}>ละทิ้งแบบร่าง</button></div>}
       {admin && bar && (
         <div className="admin-bar">
           <button className="btn sm" onClick={() => setModal({ t: 'cat', v: { sec: sec?.id } })}>+ หมวดหลัก</button>
