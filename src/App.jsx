@@ -33,15 +33,19 @@ const bgInfo = (u) => {
   if (/\.(mp4|webm|ogv|m4v|mov)(\?.*)?$/i.test(t)) return { k: 'video', src: asset(t) }
   const id = ytId(t); return id ? { k: 'yt', id } : null
 }
+const NOBG = typeof location !== 'undefined' && /[?&]nobg(=|&|$)/.test(location.search) // เปิดเว็บด้วย ?nobg=1 เพื่อปิดวิดีโอพื้นหลัง (ใช้ตรวจปัญหา)
 function Ambient({ bg, dim, off }) {
+  const [ready, setReady] = useState(false)
+  useEffect(() => { const t = setTimeout(() => setReady(true), 1500); return () => clearTimeout(t) }, []) // ให้หน้าเว็บขึ้นก่อน แล้วค่อยเริ่มวิดีโอ
   if (!bg) return null
+  const play = ready && !off && !NOBG
   const yt = bg.k === 'yt' ? `https://www.youtube-nocookie.com/embed/${bg.id}?autoplay=1&mute=1&controls=0&loop=1&playlist=${bg.id}&modestbranding=1&playsinline=1&rel=0&disablekb=1&iv_load_policy=3` : ''
   return (
     <div className="ambient" aria-hidden="true">
       {bg.k === 'yt' && <><div className="amb-img" style={{ backgroundImage: `url(https://i.ytimg.com/vi/${bg.id}/hqdefault.jpg)` }} />
-        {!off && <iframe src={yt} title="background" allow="autoplay; encrypted-media" tabIndex={-1} />}</>}
+        {play && <iframe src={yt} title="background" allow="autoplay; encrypted-media" tabIndex={-1} />}</>}
       {bg.k === 'img' && <div className="amb-img sharp" style={{ backgroundImage: `url("${bg.src}")` }} />}
-      {bg.k === 'video' && <video key={bg.src + off} className="amb-video" src={bg.src + (off ? '#t=0.1' : '')} autoPlay={!off} muted loop playsInline preload={off ? 'metadata' : 'auto'} />}
+      {bg.k === 'video' && <video key={bg.src + play} className="amb-video" src={bg.src + (play ? '' : '#t=0.1')} autoPlay={play} muted loop playsInline preload={play ? 'auto' : 'metadata'} />}
       <div className="amb-dim" style={{ opacity: dim }} />
     </div>
   )
@@ -593,7 +597,7 @@ export default function App() {
                   {admin && <><a onClick={() => setModal({ t: 'cat', v: c })}>✏️</a><a onClick={() => delCat(c)}>🗑️</a></>}
                 </span>
               ))}
-              {admin && <button className="btn sm" onClick={() => setModal({ t: 'cat', v: { sec: sec.id } })}>+ เพิ่มหมวด</button>}
+              {admin && <button className="btn sm tab-add" onClick={() => setModal({ t: 'cat', v: { sec: sec.id } })}>+ เพิ่มหมวดหมู่</button>}
             </div>
             {cat ? (<>
               <div className="cat-head">
