@@ -152,13 +152,18 @@ function Modal({ title, fields, initial, onSave, onClose, error }) {
   )
 }
 
-function Row({ it, n, pens = [], path, href, admin, onEdit, onDel }) {
+function Row({ it, n, pens = [], path, href, admin, onEdit, onDel, split }) {
   const lines = (it.detail || '').split('\n')
   const tl = lines.find((l) => l.startsWith('ประเภทคดี:'))
   const detail = lines.filter((l) => l !== tl).join('\n')
   const tag = tl ? tl.replace('ประเภทคดี:', '').trim() : ''
   const penOnly = !it.title && !detail
-  return (
+  const penEl = (it.penalty || pens.length > 0) ? <div className="penalty">
+        {it.penalty && <div>{it.penalty}</div>}
+        {pens.map((p) => <div key={p.it.id}>{p.it.penalty}{admin && <span className="acts mini"><a onClick={p.onEdit}>✏️</a><a onClick={p.onDel}>🗑️</a></span>}</div>)}
+  </div> : null
+  const sp = split && !penOnly // แยกโทษเป็นการ์ดใหม่ทางขวา
+  const card = (
     <div className={'item' + (penOnly ? ' pen-only' : '')}>
       {n != null && <span className="no">ข้อที่ {n}</span>}
       {!penOnly && <div className="item-main">
@@ -166,13 +171,11 @@ function Row({ it, n, pens = [], path, href, admin, onEdit, onDel }) {
         {(it.title || tag) && <b>{it.title && <Rich t={it.title} />}{tag && <span className={'tag' + (tag.includes('แดง') ? ' red-tag' : '')}>{tag}</span>}</b>}
         {detail && <p><Rich t={detail} /></p>}
       </div>}
-      {(it.penalty || pens.length > 0) && <div className="penalty">
-        {it.penalty && <div>{it.penalty}</div>}
-        {pens.map((p) => <div key={p.it.id}>{p.it.penalty}{admin && <span className="acts mini"><a onClick={p.onEdit}>✏️</a><a onClick={p.onDel}>🗑️</a></span>}</div>)}
-      </div>}
+      {!sp && penEl}
       {admin && <div className="acts"><a onClick={onEdit}>✏️</a><a onClick={onDel}>🗑️</a></div>}
     </div>
   )
+  return sp ? <div className="row-pair">{card}{penEl}</div> : card
 }
 
 function SearchStats({ sh }) {
@@ -420,7 +423,7 @@ export default function App() {
         </div>
         <div className={'items' + (blocks.some((b) => b.it.penalty || b.pens.length) ? ' has-pen' : '')}>
           {blocks.map((b) => (
-            <Row key={b.it.id} it={b.it} n={showNum ? b.n : null} admin={admin}
+            <Row key={b.it.id} it={b.it} n={showNum ? b.n : null} admin={admin} split
               pens={b.pens.map((p) => ({ it: p, onEdit: () => editItem(cat.id, gr.id, p), onDel: () => delItem(cat.id, gr.id, p.id) }))}
               onEdit={() => editItem(cat.id, gr.id, b.it)} onDel={() => delItem(cat.id, gr.id, b.it.id)} />))}
         </div>
