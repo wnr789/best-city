@@ -33,6 +33,8 @@ const loadRules = async () => {
   for (const [u, o] of tries) { try { const r = await fetch(import.meta.env.BASE_URL + u, o); if (r.ok) return await r.json() } catch { /* ลองวิธีถัดไป */ } }
   throw new Error('rules.json load failed')
 }
+const FS = [87.5, 93.75, 100, 112.5, 125] // ขนาดตัวอักษร 5 ระดับ (% ของค่ามาตรฐาน) — ทั้งเว็บใช้หน่วย rem จึงขยาย/ย่อพร้อมกันและยังสมดุล
+const FS_LABEL = ['เล็กมาก', 'เล็ก', 'ปกติ', 'ใหญ่', 'ใหญ่มาก']
 const bgInfo = (u) => {
   const t = String(u || '').trim(); if (!t) return null
   if (/^data:image\//i.test(t) || /\.(jpe?g|png|webp|gif|avif)(\?.*)?$/i.test(t)) return { k: 'img', src: asset(t) }
@@ -402,6 +404,7 @@ export default function App() {
   const [pub, setPub] = useState(null)
   const [draft, setDraft] = useState(() => { const d = load(DK, null); return d ? norm(d) : null })
   const [theme, setTheme] = useState(() => ls.get(TK) || 'dark')
+  const [fs, setFs] = useState(() => { const v = ls.get('bestcity_fs'), n = v == null || v === '' ? NaN : Number(v); return Number.isInteger(n) && n >= 0 && n <= 4 ? n : 2 })
   const [adminUser, setAdmin] = useState(() => (ls.get(SK) === ADMIN_USER ? ADMIN_USER : null))
   const [hash, setHash] = useState(parseHash)
   const [q, setQ] = useState('')
@@ -597,6 +600,7 @@ export default function App() {
     { k: '_file', label: 'หรือเลือกไฟล์จากเครื่อง (ภาพ ≤ 800 KB ฝังในเว็บได้ / วิดีโอ ดูตัวอย่างได้)', pick: pickBg },
     { k: 'bgDim', label: 'ความเข้มของพื้นหลัง', opts: [['0.55', 'ปกติ'], ['0.35', 'สว่าง'], ['0.75', 'มืด']] }]
   useEffect(() => { if (pub) ls.set('bestcity_bgcache', JSON.stringify({ v: pub.bgVideo || '', d: pub.bgDim || '0.55' })) }, [pub])
+  useEffect(() => { document.documentElement.style.fontSize = FS[fs] + '%'; ls.set('bestcity_fs', String(fs)) }, [fs])
   useEffect(() => { // วัดความสูงแถบเมนูด้านบน เพื่อให้ช่องค้นหาลอยต่อใต้แถบเมนูพอดี
     const h = document.querySelector('header.top'); if (!h) return
     const set = () => document.documentElement.style.setProperty('--hh', h.offsetHeight + 'px')
@@ -638,6 +642,11 @@ export default function App() {
         </nav>
         <div className="row">
           {bg && <button className="btn ghost sm" title="เปิด/ปิดวิดีโอพื้นหลัง" onClick={toggleBg}>{bgOff ? '🎬 เปิดวิดีโอ' : '🎬 ปิดวิดีโอ'}</button>}
+          <div className="fsz" role="group" aria-label="ขนาดตัวอักษร" title={'ขนาดตัวอักษร: ' + FS_LABEL[fs]}>
+            <button onClick={() => setFs(Math.max(0, fs - 1))} disabled={fs === 0} aria-label="ลดขนาดตัวอักษร"><span style={{ fontSize: '.8em' }}>A</span>−</button>
+            <span className="fsz-steps">{FS.map((_, i) => <i key={i} className={i <= fs ? 'on' : ''} style={{ height: 6 + i * 3 }} onClick={() => setFs(i)} title={FS_LABEL[i]} />)}</span>
+            <button onClick={() => setFs(Math.min(4, fs + 1))} disabled={fs === 4} aria-label="เพิ่มขนาดตัวอักษร"><span style={{ fontSize: '1.1em' }}>A</span>+</button>
+          </div>
           <button className="btn ghost sm" onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}>{theme === 'dark' ? '☀️' : '🌙'}</button>
           {adminUser ? (<>
             <button className="btn ghost sm" title="ดูหน้าเว็บแบบที่ผู้เล่นเห็นจริง" onClick={() => { setViewer(!viewer); setBar(false) }}>{viewer ? '↩ กลับโหมดแอดมิน' : '👁️ มุมมองผู้ชม'}</button>

@@ -228,3 +228,15 @@ a.chip:hover { background:var(--pri); color:#fff; }
 @keyframes mp-in { from { opacity:0; transform:translateY(8px) scale(.97); } to { opacity:1; transform:none; } }
 @media (max-width:520px) { .mplayer { left:10px; } .mp-vol { width:64px; } }
 @media print { .mplayer { display:none !important; } }
+
+/* ───── แถบปรับขนาดตัวอักษร 5 ระดับ ───── */
+.fsz { display:inline-flex; align-items:center; gap:2px; padding:3px; border-radius:999px; border:1px solid var(--line); background:color-mix(in srgb,var(--panel) 70%,transparent); }
+.fsz button { border:0; background:transparent; color:var(--text); font:inherit; font-size:.85rem; font-weight:600; width:32px; height:28px; border-radius:999px; cursor:pointer; display:inline-flex; align-items:center; justify-content:center; padding:0; line-height:1; }
+.fsz button:hover:not(:disabled) { background:var(--line); }
+.fsz button:disabled { opacity:.35; cursor:default; }
+.fsz-steps { display:inline-flex; align-items:flex-end; gap:4px; padding:0 4px; height:20px; }
+.fsz-steps i { display:block; width:6px; border-radius:3px; background:var(--line); cursor:pointer; transition:background .15s, transform .15s; }
+.fsz-steps i.on { background:linear-gradient(180deg,var(--pri2),var(--pri)); }
+.fsz-steps i:hover { transform:scaleY(1.15); }
+@media (max-width:520px) { .fsz button { width:28px; } }
+@media print { .fsz { display:none !important; } }
