@@ -593,6 +593,7 @@ export default function App() {
                   {admin && <><a onClick={() => setModal({ t: 'cat', v: c })}>✏️</a><a onClick={() => delCat(c)}>🗑️</a></>}
                 </span>
               ))}
+              {admin && <button className="btn sm" onClick={() => setModal({ t: 'cat', v: { sec: sec.id } })}>+ เพิ่มหมวด</button>}
             </div>
             {cat ? (<>
               <div className="cat-head">
