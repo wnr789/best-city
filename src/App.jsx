@@ -152,6 +152,143 @@ function Modal({ title, fields, initial, onSave, onClose, error }) {
   )
 }
 
+// ───────── เครื่องเล่นเพลง (มุมซ้ายล่าง) ─────────
+// รองรับ: ลิงก์ YouTube และไฟล์เสียง (.mp3 .ogg .wav .m4a ...) ที่วางไว้ใน public/ หรือลิงก์ตรง
+const AUDIO_RE = /\.(mp3|ogg|oga|opus|wav|m4a|aac|flac|weba)(\?.*)?$/i
+const parseTracks = (txt) => {
+  const tracks = [], bad = []
+  String(txt || '').split('\n').map((l) => l.trim()).filter(Boolean).forEach((line) => {
+    const i = line.lastIndexOf('|')
+    const named = i >= 0 ? line.slice(0, i).trim() : ''
+    const url = (i >= 0 ? line.slice(i + 1) : line).trim()
+    const id = ytId(url)
+    if (AUDIO_RE.test(url) || /^data:audio\//i.test(url)) {
+      let fallback = 'เพลง'
+      try { fallback = decodeURIComponent(url.split('/').pop().split('?')[0]).replace(/\.[^.]+$/, '') || fallback } catch { /* ignore */ }
+      tracks.push({ k: 'audio', src: asset(url), title: named || fallback, named: !!named })
+    } else if (id) tracks.push({ k: 'yt', id, title: named || 'YouTube', named: !!named })
+    else bad.push(line)
+  })
+  return { tracks, bad }
+}
+let ytApi
+const loadYT = () => ytApi || (ytApi = new Promise((res) => {
+  if (window.YT?.Player) return res(window.YT)
+  const prev = window.onYouTubeIframeAPIReady
+  window.onYouTubeIframeAPIReady = () => { prev?.(); res(window.YT) }
+  const sc = document.createElement('script'); sc.src = 'https://www.youtube.com/iframe_api'; sc.onerror = () => res(null)
+  document.head.appendChild(sc)
+}))
+
+function MusicPlayer({ list }) {
+  const tracks = useMemo(() => parseTracks(list).tracks, [list])
+  const key = tracks.map((t) => (t.id || t.src)).join('|')
+  const sv = ls.get('bestcity_vol')
+  const [idx, setIdx] = useState(0)
+  const [playing, setPlaying] = useState(false)
+  const [blocked, setBlocked] = useState(false)
+  const [open, setOpen] = useState(false)
+  const [vol, setVol] = useState(sv == null || sv === '' || isNaN(Number(sv)) ? 40 : Math.min(100, Math.max(0, Number(sv))))
+  const [muted, setMuted] = useState(ls.get('bestcity_mute') === '1')
+  const [ytTitle, setYtTitle] = useState('')
+  const audioRef = useRef(null), wrapRef = useRef(null), yt = useRef(null)
+  const want = useRef(ls.get('bestcity_music_off') !== '1') // อยากให้เล่นอัตโนมัติ (ผู้ชมกดปิดไว้ครั้งก่อน = ไม่เล่นเอง)
+  const idxRef = useRef(0), tracksRef = useRef(tracks), volRef = useRef({ vol, muted }), playingRef = useRef(false), nextRef = useRef(() => {})
+  tracksRef.current = tracks; idxRef.current = idx; volRef.current = { vol, muted }; playingRef.current = playing
+
+  const applyVol = () => {
+    const { vol: v, muted: m } = volRef.current
+    const a = audioRef.current; if (a) { a.volume = v / 100; a.muted = m }
+    const p = yt.current?.p; if (p?.setVolume) { p.setVolume(v); m ? p.mute() : p.unMute() }
+  }
+  const getYT = () => new Promise((res) => {
+    if (yt.current?.ready) return res(yt.current.p)
+    loadYT().then((YT) => {
+      if (!YT) return
+      if (yt.current) { yt.current.cbs.push(res); return }
+      const st = { p: null, ready: false, cbs: [res] }; yt.current = st
+      const host = document.createElement('div'); wrapRef.current.appendChild(host)
+      const p = new YT.Player(host, { width: '2', height: '2', playerVars: { playsinline: 1, controls: 0, disablekb: 1, fs: 0, rel: 0 }, events: {
+        onReady: () => { st.p = p; st.ready = true; applyVol(); st.cbs.splice(0).forEach((f) => f(p)) },
+        onStateChange: (e) => {
+          if (e.data === 1) { setPlaying(true); setBlocked(false); try { setYtTitle(p.getVideoData().title || '') } catch { /* ignore */ } }
+          else if (e.data === 2) setPlaying(false)
+          else if (e.data === 0) { if (tracksRef.current.length === 1) { p.seekTo(0); p.playVideo() } else nextRef.current() }
+        },
+        onError: () => nextRef.current(),
+      } })
+    })
+  })
+  const doPlay = () => {
+    const t = tracksRef.current[idxRef.current]; if (!t) return
+    if (t.k === 'audio') {
+      yt.current?.p?.pauseVideo?.()
+      const a = audioRef.current; if (!a) return
+      if (a.dataset.src !== t.src) { a.src = t.src; a.dataset.src = t.src }
+      applyVol(); a.play().catch(() => { setBlocked(true); setPlaying(false) })
+    } else {
+      audioRef.current?.pause()
+      getYT().then((p) => {
+        applyVol()
+        if ((p.getVideoData?.() || {}).video_id !== t.id) p.loadVideoById(t.id); else p.playVideo()
+        setTimeout(() => { if (want.current && !playingRef.current) setBlocked(true) }, 1800)
+      })
+    }
+  }
+  const next = (skip) => { const n = tracksRef.current.length; if (n < 2) return; setIdx((idxRef.current + (skip === -1 ? n - 1 : 1)) % n) }
+  nextRef.current = next
+  const toggle = () => {
+    if (playing) { want.current = false; ls.set('bestcity_music_off', '1'); audioRef.current?.pause(); yt.current?.p?.pauseVideo?.() }
+    else { want.current = true; ls.del('bestcity_music_off'); setBlocked(false); doPlay() }
+  }
+
+  useEffect(() => { setIdx(0); setYtTitle('') }, [key])
+  useEffect(() => { if (want.current) doPlay(); else { audioRef.current?.pause(); yt.current?.p?.pauseVideo?.() } }, [key, idx]) // eslint-disable-line
+  useEffect(() => { applyVol(); ls.set('bestcity_vol', String(vol)); ls.set('bestcity_mute', muted ? '1' : '') }, [vol, muted])
+  // เบราว์เซอร์ส่วนใหญ่บล็อกเสียงอัตโนมัติ: ถ้ายังไม่ได้เล่น จะเริ่มเล่นให้ทันทีที่ผู้ชมแตะ/คลิก/กดแป้นครั้งแรก
+  useEffect(() => {
+    if (playing || !tracks.length) return
+    const go = (e) => { if (e.target?.closest?.('.mplayer')) return; if (want.current && !playingRef.current) doPlay() }
+    const ev = ['pointerdown', 'keydown', 'touchstart']
+    ev.forEach((n) => window.addEventListener(n, go, { capture: true }))
+    return () => ev.forEach((n) => window.removeEventListener(n, go, { capture: true }))
+  }, [playing, key]) // eslint-disable-line
+  useEffect(() => () => { audioRef.current?.pause(); try { yt.current?.p?.destroy() } catch { /* ignore */ } yt.current = null }, [])
+
+  const t = tracks[Math.min(idx, tracks.length - 1)] || {}
+  const title = t.k === 'yt' && !t.named ? (ytTitle || 'กำลังโหลด...') : t.title
+  const discClick = () => { if (!playing && blocked) { want.current = true; ls.del('bestcity_music_off'); setBlocked(false); doPlay() } else setOpen((o) => !o) }
+  return (
+    <div style={tracks.length ? undefined : { display: 'none' }} className={'mplayer' + (open ? ' open' : '') + (playing ? ' on' : '') + (blocked && !playing ? ' hint' : '')}>
+      <audio ref={audioRef} preload="auto" loop={tracks.length === 1}
+        onPlay={() => { setPlaying(true); setBlocked(false) }} onPause={() => setPlaying(false)}
+        onEnded={() => next()} onError={() => next()} />
+      <div className="mp-yt" ref={wrapRef} aria-hidden="true" />
+      <button className="mp-disc" onClick={discClick} title={playing ? 'เครื่องเล่นเพลง' : blocked ? 'แตะเพื่อเปิดเพลง' : 'เครื่องเล่นเพลง'} aria-label="เครื่องเล่นเพลง">
+        <span className="mp-vinyl">🎵</span>
+        <i className="mp-eq" aria-hidden="true"><b /><b /><b /><b /></i>
+      </button>
+      {blocked && !playing && !open && <span className="mp-bubble" onClick={discClick}>แตะเพื่อเปิดเพลง 🎶</span>}
+      <div className="mp-panel">
+        <div className="mp-head">
+          <div className="mp-title"><span>{title}</span></div>
+          <button className="mp-x" onClick={() => setOpen(false)} title="ย่อเก็บ" aria-label="ย่อเก็บ">⌄</button>
+        </div>
+        <div className="mp-sub">{tracks.length > 1 ? `เพลงที่ ${Math.min(idx, tracks.length - 1) + 1}/${tracks.length} · ` : ''}{playing ? 'กำลังเล่น' : 'หยุดอยู่'}</div>
+        <div className="mp-ctrl">
+          {tracks.length > 1 && <button onClick={() => next(-1)} title="เพลงก่อนหน้า" aria-label="เพลงก่อนหน้า">⏮</button>}
+          <button className="mp-play" onClick={toggle} title={playing ? 'ปิดเพลง' : 'เล่นเพลง'} aria-label={playing ? 'ปิดเพลง' : 'เล่นเพลง'}>{playing ? '⏸' : '▶'}</button>
+          {tracks.length > 1 && <button onClick={() => next()} title="เพลงถัดไป" aria-label="เพลงถัดไป">⏭</button>}
+          <button className="mp-mute" onClick={() => setMuted((m) => !m)} title={muted ? 'เปิดเสียง' : 'ปิดเสียง'} aria-label="ปิด/เปิดเสียง">{muted || vol === 0 ? '🔇' : vol < 45 ? '🔉' : '🔊'}</button>
+          <input className="mp-vol" type="range" min="0" max="100" value={muted ? 0 : vol} aria-label="ระดับเสียง"
+            style={{ '--v': (muted ? 0 : vol) + '%' }}
+            onChange={(e) => { const v = Number(e.target.value); setVol(v); setMuted(v === 0) }} />
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function Row({ it, n, pens = [], path, href, admin, onEdit, onDel, split }) {
   const lines = (it.detail || '').split('\n')
   const tl = lines.find((l) => l.startsWith('ประเภทคดี:'))
@@ -516,6 +653,7 @@ export default function App() {
           <button className="btn sm" onClick={() => setModal({ t: 'stats' })}>📊 สถิติ</button>
           <button className="btn sm" onClick={() => setModal({ t: 'site' })}>ตั้งค่าเว็บ</button>
           <button className="btn sm" onClick={() => setModal({ t: 'bg', v: { bgVideo: data.bgVideo, bgDim: data.bgDim } })}>🎬 วิดีโอพื้นหลัง</button>
+          <button className="btn sm" onClick={() => setModal({ t: 'music', v: { music: data.music || '' } })}>🎵 เพลง</button>
           <button className="btn sm" onClick={() => setModal({ t: 'dups' })}>🔍 หาข้อซ้ำ</button>
           <button className="btn sm" onClick={exportJSON}>⬇ Export</button>
           <button className="btn sm" onClick={() => file.current.click()}>⬆ Import</button>
@@ -606,6 +744,7 @@ export default function App() {
         </main>
       )}
 
+      <MusicPlayer list={data.music} />
       <footer>⚡ {data.siteName}<br />© {new Date().getFullYear()} {data.siteName} — FiveM Roleplay Server</footer>
       {top && <button className="totop noprint" onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}>↑</button>}
       {toast && <div className="toast">{toast}</div>}
@@ -623,6 +762,9 @@ export default function App() {
         fields={[{ k: 'siteName', label: 'ชื่อเมือง' }, { k: 'welcome', label: 'ข้อความต้อนรับ' }, { k: 'tagline', label: 'คำโปรย' }, { k: 'announcement', label: 'ประกาศ/อัปเดตกฎล่าสุด (แสดงแบนเนอร์หน้าแรก เว้นว่าง = ซ่อน)' }, { k: 'heroImage', label: 'URL โลโก้/รูปหน้าแรก' }, { k: 'discord', label: 'ลิงก์ Discord' }, { k: 'facebook', label: 'ลิงก์ Facebook' }, { k: 'gcCode', label: 'GoatCounter site code (สถิติผู้เข้าชม เช่น bestcity เว้นว่าง = ไม่นับ)' }, ...bgFields]}
         onSave={(v) => { if (!okBg(v.bgVideo)) return alert(BADBG); commit({ ...data, ...['siteName', 'welcome', 'tagline', 'announcement', 'heroImage', 'discord', 'facebook', 'bgVideo'].reduce((o, k) => ({ ...o, [k]: (v[k] || '').trim() }), {}), bgDim: v.bgDim || '0.55', gcCode: (v.gcCode || '').trim().toLowerCase().replace(/[^a-z0-9-]/g, '') }); setModal(null) }} />}
       {modal?.t === 'bg' && <Modal title="🎬 วิดีโอพื้นหลัง (YouTube)" initial={modal.v} fields={bgFields} onClose={() => setModal(null)} onSave={saveBg} />}
+      {modal?.t === 'music' && <Modal title="🎵 เพลงพื้นหลัง" initial={modal.v} onClose={() => setModal(null)}
+        fields={[{ k: 'music', area: true, label: 'ใส่ได้หลายเพลง บรรทัดละ 1 เพลง รูปแบบ  ชื่อเพลง | ลิงก์  (ชื่อเพลงจะเว้นไว้ก็ได้) — ลิงก์ใช้ได้: YouTube หรือไฟล์เสียง .mp3 ที่วางไว้ใน public/ เช่น song.mp3 (เว้นว่างทั้งหมด = ไม่มีเพลง)' }]}
+        onSave={(v) => { const t = (v.music || '').trim(); const r = parseTracks(t); if (r.bad.length) return alert('ลิงก์ไม่ถูกต้อง: ' + r.bad[0].slice(0, 80) + '\nใช้ได้: ลิงก์ YouTube หรือไฟล์เสียง (.mp3 .ogg .wav .m4a)'); commit({ ...data, music: t }); setModal(null) }} />}
       {modal?.t === 'stats' && (
         <div className="overlay" onClick={() => setModal(null)}>
           <div className="modal wide" onClick={(e) => e.stopPropagation()}>
