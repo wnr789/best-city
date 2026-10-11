@@ -171,3 +171,7 @@ a.chip:hover { background:var(--pri); color:#fff; }
 /* ข้อความโทษที่หัวหมวด ย้ายไปอยู่ฝั่งขวา */
 .ph-right { display:flex; align-items:center; justify-content:flex-end; gap:12px; flex-wrap:wrap; }
 .ph-right .note { margin-left:0; white-space:nowrap; }
+
+/* เลื่อนจอลง: ช่องค้นหาย่อเป็นช่องเล็กชิดขวา (ยังพิมพ์ค้นหาได้ และกดแล้วขยายออก) */
+.searchbar.mini { max-width:260px; margin-left:auto; margin-right:0; }
+.searchbar.mini:focus-within { max-width:min(480px,100%); }
