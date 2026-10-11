@@ -265,6 +265,7 @@ export default function App() {
   const [nav, setNav] = useState(false)
   const [toast, setToast] = useState('')
   const [top, setTop] = useState(false)
+  const [mini, setMini] = useState(false)
   const [sel, setSel] = useState(() => parseHash().grp)
   const [pall, setPall] = useState(false)
   const [preview, setPreview] = useState(null)
@@ -278,7 +279,7 @@ export default function App() {
   useEffect(() => {
     fetch(import.meta.env.BASE_URL + 'rules.json?t=' + Date.now()).then((r) => r.json()).then((d) => setPub(norm(d))).catch(() => setPub(DEF))
     const f = () => { setHash(parseHash()); setSel(parseHash().grp); setQ(''); setNav(false) }
-    const s = () => setTop(window.scrollY > 500)
+    const s = () => { setTop(window.scrollY > 500); setMini(window.scrollY > 160) }
     window.addEventListener('hashchange', f); window.addEventListener('scroll', s)
     return () => { window.removeEventListener('hashchange', f); window.removeEventListener('scroll', s) }
   }, [])
@@ -520,8 +521,8 @@ export default function App() {
         </div>
       )}
 
-      <div className="searchbar">
-        <input id="gsearch" className="search slim" type="search" autoComplete="off" placeholder="🔍 ค้นหาคีย์เวิร์ดจากทุกหน้า เช่น ขโมยรถ ค่าปรับ ค่ารักษา... (กด / เพื่อค้นหา)" value={q} onChange={(e) => setQ(e.target.value)} />
+      <div className={'searchbar' + (mini ? ' mini' : '')}>
+        <input id="gsearch" className="search slim" type="search" autoComplete="off" placeholder={mini ? '🔍 ค้นหา...' : '🔍 ค้นหาคีย์เวิร์ดจากทุกหน้า เช่น ขโมยรถ ค่าปรับ ค่ารักษา... (กด / เพื่อค้นหา)'} value={q} onChange={(e) => setQ(e.target.value)} />
         {q && <button className="clear" onClick={() => setQ('')}>✕</button>}
       </div>
       {hash.route === 'home' && !results && (<>
