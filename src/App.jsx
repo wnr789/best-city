@@ -389,7 +389,8 @@ export default function App() {
     r.readAsText(f); e.target.value = ''
   }
   const copy = (sid, cid, gid) => { navigator.clipboard?.writeText(link(sid, cid, gid)); say('คัดลอกลิงก์แล้ว') }
-  const pick = (gid) => { const n = sel === gid ? '' : gid; setSel(n); history.replaceState(null, '', '#/' + [sec.id, cat.id, n].filter(Boolean).join('/')) }
+  const curId = cat ? (cat.groups.find((g) => g.id === sel) ? sel : cat.groups[0]?.id) : undefined // ถ้ายังไม่ได้เลือก ให้เปิดหัวข้อแรกอัตโนมัติ
+  const pick = (gid) => { const n = gid; setSel(n); history.replaceState(null, '', '#/' + [sec.id, cat.id, n].filter(Boolean).join('/')) }
   const printAll = () => { setPall(true); setTimeout(() => { window.print(); setPall(false) }, 200) }
 
   const catOpts = cats.map((c) => [c.id, `${(secs.find((x) => x.id === c.sec) || {}).title || ''} › ${c.icon} ${c.title}`])
@@ -417,7 +418,7 @@ export default function App() {
             </div>
           </div>
         </div>
-        <div className="items">
+        <div className={'items' + (blocks.some((b) => b.it.penalty || b.pens.length) ? ' has-pen' : '')}>
           {blocks.map((b) => (
             <Row key={b.it.id} it={b.it} n={showNum ? b.n : null} admin={admin}
               pens={b.pens.map((p) => ({ it: p, onEdit: () => editItem(cat.id, gr.id, p), onDel: () => delItem(cat.id, gr.id, p.id) }))}
@@ -584,15 +585,15 @@ export default function App() {
                 <div className="glist">
                   <div className="glist-h">หัวข้อย่อย ({cat.groups.length})</div>
                   {cat.groups.map((gr) => (
-                    <div key={gr.id} className={'gitem' + (sel === gr.id ? ' on' : '')}>
+                    <div key={gr.id} className={'gitem' + (curId === gr.id ? ' on' : '')}>
                       <button style={gr.color ? { borderLeft: '4px solid ' + gr.color } : null} onClick={() => pick(gr.id)}><span>{gr.icon && <>{gr.icon} </>}{gr.title}</span><small>{gr.items.length}</small></button>
-                      {sel === gr.id && <div className="inline-open">{panel(gr)}</div>}
+                      {curId === gr.id && <div className="inline-open">{panel(gr)}</div>}
                     </div>
                   ))}
                   {admin && <button className="btn sm" onClick={() => setModal({ t: 'group', cid: cat.id })}>+ เพิ่มหมวดย่อย</button>}
                 </div>
                 <div className="right-panel">
-                  {cat.groups.find((g) => g.id === sel) ? panel(cat.groups.find((g) => g.id === sel))
+                  {cat.groups.find((g) => g.id === curId) ? panel(cat.groups.find((g) => g.id === curId))
                     : <div className="placeholder">👈 เลือกหัวข้อย่อยทางซ้ายเพื่อดูรายละเอียด<br /><small>ทั้งหมวดมี {cat.groups.length} หัวข้อ / {total} รายการ</small></div>}
                 </div>
               </div>

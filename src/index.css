@@ -175,3 +175,13 @@ a.chip:hover { background:var(--pri); color:#fff; }
 /* เลื่อนจอลง: ช่องค้นหาย่อเป็นช่องเล็กชิดขวา (ยังพิมพ์ค้นหาได้ และกดแล้วขยายออก) */
 .searchbar.mini { max-width:260px; margin-left:auto; margin-right:0; }
 .searchbar.mini:focus-within { max-width:min(480px,100%); }
+
+/* รายการที่มีโทษ: แบ่ง 3 คอลัมน์ [ข้อที่ | เนื้อหา | โทษ] + ปุ่มแก้ไข ชิดขวา */
+@media (min-width:821px) {
+  .items.has-pen .item { display:grid; grid-template-columns:max-content minmax(0,1fr) 210px max-content; column-gap:16px; align-items:start; }
+  .items.has-pen .item > .no { grid-column:1; }
+  .items.has-pen .item > .item-main { grid-column:2; }
+  .items.has-pen .item > .penalty { grid-column:3; max-width:none; text-align:left; align-self:stretch; padding:0 0 0 16px !important; border-left:1px solid var(--line); }
+  .items.has-pen .item > .acts { grid-column:4; }
+  .items.has-pen .item.pen-only > .penalty { grid-column:2 / 4; border-left:0; padding-left:0 !important; }
+}
