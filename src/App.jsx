@@ -27,6 +27,12 @@ const DEF = norm(DEFAULT_DATA)
 const parseHash = () => { const p = location.hash.replace(/^#\/?/, '').split('/'); return { route: p[0] || 'home', cat: p[1] || '', grp: p[2] || '' } }
 const ytId = (u) => { const t = String(u || '').trim(); const m = t.match(/(?:youtu\.be\/|[?&]v=|\/embed\/|\/shorts\/|\/live\/)([\w-]{11})/); return m ? m[1] : /^[\w-]{11}$/.test(t) ? t : '' }
 const asset = (u) => (/^(https?:|data:|blob:)/i.test(u) ? u : import.meta.env.BASE_URL + u.replace(/^\.?\//, ''))
+// โหลดกฎล่าสุดจาก rules.json โดยไม่ใช้แคช (ลองซ้ำอีกวิธีหนึ่งถ้าครั้งแรกไม่สำเร็จ)
+const loadRules = async () => {
+  const tries = [['rules.json?t=' + Date.now(), { cache: 'no-store' }], ['rules.json?v=' + Math.random().toString(36).slice(2), { cache: 'reload' }]]
+  for (const [u, o] of tries) { try { const r = await fetch(import.meta.env.BASE_URL + u, o); if (r.ok) return await r.json() } catch { /* ลองวิธีถัดไป */ } }
+  throw new Error('rules.json load failed')
+}
 const bgInfo = (u) => {
   const t = String(u || '').trim(); if (!t) return null
   if (/^data:image\//i.test(t) || /\.(jpe?g|png|webp|gif|avif)(\?.*)?$/i.test(t)) return { k: 'img', src: asset(t) }
@@ -417,7 +423,7 @@ export default function App() {
 
   useEffect(() => { document.documentElement.dataset.theme = theme; ls.set(TK, theme) }, [theme])
   useEffect(() => {
-    fetch(import.meta.env.BASE_URL + 'rules.json?t=' + Date.now()).then((r) => r.json()).then((d) => setPub(norm(d))).catch(() => setPub(DEF))
+    loadRules().then((d) => setPub(norm(d))).catch(() => setPub(DEF))
     const f = () => { setHash(parseHash()); setSel(parseHash().grp); setQ(''); setNav(false) }
     const s = () => { setTop(window.scrollY > 500); setMini(window.scrollY > 160) }
     window.addEventListener('hashchange', f); window.addEventListener('scroll', s)
@@ -745,7 +751,7 @@ export default function App() {
       )}
 
       <MusicPlayer list={data.music} />
-      <footer>⚡ {data.siteName}<br />© {new Date().getFullYear()} {data.siteName} — FiveM Roleplay Server</footer>
+      <footer>⚡ {data.siteName}<br />© {new Date().getFullYear()} {data.siteName} — FiveM Roleplay Server{data.updated && <><br /><small className="muted">ข้อมูลกฎอัปเดตล่าสุด {data.updated}</small></>}</footer>
       {top && <button className="totop noprint" onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}>↑</button>}
       {toast && <div className="toast">{toast}</div>}
 
