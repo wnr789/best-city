@@ -167,3 +167,7 @@ a.chip:hover { background:var(--pri); color:#fff; }
 /* ช่องค้นหาลอยติดใต้แถบเมนู */
 .searchbar { position:sticky; top:calc(var(--hh,60px) + 8px); z-index:19; }
 .searchbar .search.slim { box-shadow:0 6px 22px #0005; background:color-mix(in srgb,var(--panel) 94%,transparent); backdrop-filter:blur(8px); }
+
+/* ข้อความโทษที่หัวหมวด ย้ายไปอยู่ฝั่งขวา */
+.ph-right { display:flex; align-items:center; justify-content:flex-end; gap:12px; flex-wrap:wrap; }
+.ph-right .note { margin-left:0; white-space:nowrap; }

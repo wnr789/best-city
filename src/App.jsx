@@ -404,13 +404,16 @@ export default function App() {
       <section className="panel gpanel">
         <div className="panel-h" style={gr.color ? { borderLeftColor: gr.color } : null}>
           <div><small className="crumbline">{sec.icon} {sec.title} › {cat.icon} {cat.title}</small>
-            <h3>{gr.icon && <span>{gr.icon} </span>}{gr.title}</h3>{gr.note && <span className="note">{gr.note}</span>}</div>
-          <div className="acts">
+            <h3>{gr.icon && <span>{gr.icon} </span>}{gr.title}</h3></div>
+          <div className="ph-right">
+            {gr.note && <span className="note">{gr.note}</span>}
+            <div className="acts">
             <a title="คัดลอกลิงก์" className="noprint" onClick={() => copy(sec.id, cat.id, gr.id)}>🔗</a>
             {admin && <>
               <a onClick={() => setModal({ t: 'item', cid: cat.id, gid: gr.id })}>➕ รายการ</a>
               <a onClick={() => setModal({ t: 'group', cid: cat.id, v: { ...gr, move: cat.id } })}>✏️</a>
               <a onClick={() => delGroup(cat.id, gr)}>🗑️</a></>}
+            </div>
           </div>
         </div>
         <div className="items">
