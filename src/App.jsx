@@ -175,34 +175,6 @@ function Row({ it, n, pens = [], path, href, admin, onEdit, onDel }) {
   )
 }
 
-function Calc() {
-  const [fine, setFine] = useState(50000), [mult, setMult] = useState(1)
-  const [mins, setMins] = useState(30), [red, setRed] = useState(false)
-  const [ic, setIc] = useState(100000)
-  const th = red ? 30 : 5, pay = Math.max(0, mins - th)
-  return (
-    <div className="calc">
-      <section className="panel"><div className="panel-h"><h3>💸 ค่าปรับ x ตัวคูณ</h3></div>
-        <div className="calc-b">
-          <label>ค่าปรับต้นทาง (IC)<input value={fine} onChange={(e) => setFine(num(e))} inputMode="numeric" /></label>
-          <label>ตัวคูณ<select value={mult} onChange={(e) => setMult(Number(e.target.value))}>{[1, 2, 3, 5].map((m) => <option key={m} value={m}>x{m}</option>)}</select></label>
-          <div className="res">ค่าปรับรวม <b className="red">{fmt(fine * mult)} IC</b></div>
-        </div></section>
-      <section className="panel"><div className="panel-h"><h3>⛓️ ค่าประกันตัว</h3></div>
-        <div className="calc-b">
-          <label>เวลาจำคุก (นาที)<input value={mins} onChange={(e) => setMins(num(e))} inputMode="numeric" /></label>
-          <label>ประเภทคดี<select value={red ? 'r' : 'g'} onChange={(e) => setRed(e.target.value === 'r')}><option value="g">คดีทั่วไป (ประกันได้จนเหลือ 5 นาที)</option><option value="r">คดีแดง (ประกันได้จนเหลือ 30 นาที)</option></select></label>
-          <div className="res">ประกันตัวได้ <b>{pay} นาที</b> = <b className="red">{fmt(pay * 500)} IC</b>{pay === 0 && <small className="muted"> (เวลาไม่พอให้ประกัน)</small>}</div>
-        </div></section>
-      <section className="panel"><div className="panel-h"><h3>🔁 แปลงบิลจำคุก (1 นาที = 500 IC)</h3></div>
-        <div className="calc-b">
-          <label>จำนวนเงิน (IC)<input value={ic} onChange={(e) => setIc(num(e))} inputMode="numeric" /></label>
-          <div className="res">เท่ากับจำคุก <b>{(ic / 500).toLocaleString('en-US', { maximumFractionDigits: 1 })} นาที</b></div>
-        </div></section>
-    </div>
-  )
-}
-
 function SearchStats({ sh }) {
   const chips = (arr, cls = '') => arr.map(([t, n]) => <span key={t} className={'chip ' + cls}>{t} <b>{n}</b></span>)
   return (<>
@@ -338,7 +310,7 @@ export default function App() {
     const hit = (...a) => a.join(' ').replace(STRIP, '').toLowerCase().includes(k)
     return [...secs.filter((x) => hit(x.title, x.desc)).map((x) => ({ k: 's' + x.id, t: `${x.icon} ${x.title}`, h: '#/' + x.id })),
       ...cats.filter((c) => hit(c.title, c.sub)).map((c) => ({ k: c.id, t: `${c.icon} ${c.title}`, h: '#/' + [c.sec, c.id].join('/') })),
-      ...(hit('คำนวณ โทษ ค่าประกัน เครื่องคิดเลข ประกันตัว บิลจำคุก') ? [{ k: 'tools', t: '🧮 เครื่องคิดเลขโทษ', h: '#/tools' }] : [])]
+    ]
   }, [q, secs, cats])
   const dups = () => {
     const m = {}
@@ -474,6 +446,11 @@ export default function App() {
     { k: '_file', label: 'หรือเลือกไฟล์จากเครื่อง (ภาพ ≤ 800 KB ฝังในเว็บได้ / วิดีโอ ดูตัวอย่างได้)', pick: pickBg },
     { k: 'bgDim', label: 'ความเข้มของพื้นหลัง', opts: [['0.55', 'ปกติ'], ['0.35', 'สว่าง'], ['0.75', 'มืด']] }]
   useEffect(() => { if (pub) ls.set('bestcity_bgcache', JSON.stringify({ v: pub.bgVideo || '', d: pub.bgDim || '0.55' })) }, [pub])
+  useEffect(() => { // วัดความสูงแถบเมนูด้านบน เพื่อให้ช่องค้นหาลอยต่อใต้แถบเมนูพอดี
+    const h = document.querySelector('header.top'); if (!h) return
+    const set = () => document.documentElement.style.setProperty('--hh', h.offsetHeight + 'px')
+    set(); const ro = new ResizeObserver(set); ro.observe(h); return () => ro.disconnect()
+  }, [pub, adminUser])
   useEffect(() => {
     const f = (e) => { if (e.key === '/' && !/INPUT|TEXTAREA|SELECT/.test(document.activeElement?.tagName || '')) { e.preventDefault(); document.getElementById('gsearch')?.focus() } }
     window.addEventListener('keydown', f); return () => window.removeEventListener('keydown', f)
@@ -506,7 +483,6 @@ export default function App() {
         <nav className={'links' + (nav ? ' open' : '')}>
           <a className={hash.route === 'home' ? 'on' : ''} onClick={() => go('home')}>🏠 หน้าแรก</a>
           {secs.map((s) => <a key={s.id} className={hash.route === s.id ? 'on' : ''} onClick={() => go(s.id)}>{s.icon} {s.title}</a>)}
-          <a className={hash.route === 'tools' ? 'on' : ''} onClick={() => go('tools')}>🧮 คำนวณโทษ</a>
           {data.discord && <a href={data.discord} target="_blank" rel="noreferrer">💬 Discord</a>}
         </nav>
         <div className="row">
@@ -559,7 +535,6 @@ export default function App() {
               <small>{cats.filter((c) => c.sec === s.id).length} หมวด →</small>
             </a>
           ))}
-          <a className="sec-card" onClick={() => go('tools')}><span className="ic">🧮</span><h3>คำนวณโทษ</h3><p>คิดค่าปรับ ค่าประกันตัว และแปลงบิลจำคุก</p><small>เปิดเครื่องมือ →</small></a>
         </section>
         <section className="contact">
           <h2>ช่องทางการติดต่อ</h2>
@@ -580,10 +555,6 @@ export default function App() {
             <section className="panel">{results.map(({ it, c, gr }) => (
               <Row key={it.id} it={it} path={`${c.title} › ${gr.title}`} href={'#/' + [c.sec, c.id, gr.id].join('/')} admin={admin}
                 onEdit={() => editItem(c.id, gr.id, it)} onDel={() => delItem(c.id, gr.id, it.id)} />))}</section>
-          </>) : hash.route === 'tools' ? (<>
-            <div className="crumb"><a onClick={() => go('home')}>หน้าแรก</a> › คำนวณโทษ</div>
-            <div className="cat-head"><div><h1>🧮 เครื่องคิดเลขโทษ</h1><p className="muted">อัตราบิลจำคุก 1 นาที = 500 IC | คดีทั่วไปประกันได้จนเหลือ 5 นาที | คดีแดงประกันได้จนเหลือ 30 นาที</p></div></div>
-            <Calc />
           </>) : !sec ? <p className="muted">ไม่พบหน้านี้ <a className="lnk" onClick={() => go('home')}>กลับหน้าแรก</a></p> : (<>
             <div className="crumb"><a onClick={() => go('home')}>หน้าแรก</a> › {sec.title}</div>
             <div className="cat-head">
